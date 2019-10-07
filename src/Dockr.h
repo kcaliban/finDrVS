@@ -7,6 +7,7 @@
 */
 #ifndef SRC_DOCKR_H_
 #define SRC_DOCKR_H_
+#include <math.h>
 #include <omp.h>
 #include <mpi.h>
 #include <sys/stat.h>
@@ -14,10 +15,13 @@
 #include "inih/INIReader.h"
 #include "cxxopts/cxxopts.hpp"
 #include "VinaInstance/VinaInstance.h"
+#include "Serialization/Serialization.h"
+#include "Communication.h"
 std::string mgltoolstilitiesPath;
 std::string pythonShPath;
 std::string workDir;
-std::string receptors;
+std::string receptorsdir;
+std::vector<std::string> receptors;
 std::string library;
 std::string vina;
 int exhaustiveness;

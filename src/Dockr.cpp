@@ -26,13 +26,14 @@ std::string PDBtoFASTA(std::string filename) {
   return FASTA;
 }
 
+
 // Get ligand filenames
 std::vector<std::string> getLibrary(std::string dir) {
   // Read all pdb files in a directory
   std::string command;
   command.append("ls ");
   command.append(dir);
-  command.append(" | cat ");
+  command.append(" | cat | grep -v \"\\.pdbqt\"");
   std::string output;
   FILE * lsOutputStream = popen(command.c_str(), "r");
   char buf[1024];
@@ -69,12 +70,13 @@ std::vector<std::string> getReceptorsM(std::string dir, bool prep = false) {
     output += buf;
   }
   pclose(lsOutputStream);
+  // Output of receptors
   // Return vector of every filename
   std::vector<std::string> result;
   std::string line;
   std::stringstream outputStream(output);
   while (std::getline(outputStream, line, '\n')) {
-    result.push_back(line);
+    result.push_back(dir + "/" + line);
   }
   return result;
 }
@@ -181,6 +183,26 @@ void prepareLigand(std::string ligand) {
   }
 }
 
+float genDock(std::string file) {
+  float affinity = 10;
+  // Prepare ligand
+  try {
+    prepareLigand(file);
+  } catch (...) {
+    throw;
+  }
+  // Do a docking for each receptor
+  for (unsigned int i = 0; i < receptors.size(); i++) {
+    VinaInstance vinaInstance(vina.c_str(), receptors.at(i).c_str(),
+                              file.c_str(), info);
+    float recaffinity = vinaInstance.calculateBindingAffinity(exhaustiveness,
+                                                              5);
+    if (recaffinity < affinity) { affinity = recaffinity; }
+  }
+
+  return affinity;
+}
+
 void check(const std::string p) {
   struct stat st;
   if (stat(p.c_str(), &st) != 0) {
@@ -193,22 +215,101 @@ void check(const std::string p) {
 void checkExecutable(const std::string e) {
   std::string command;
   command.append(e);
-  command.append(" -h");
+  command.append(" --help");
   command.append(" 2>/dev/null 1>&2");
   int success = system(command.c_str());
   if (success != 0) {
-    std::cout << "Cannot start AutoDock Vina!\n"
+    std::cout << "Cannot start " + e + "!\n"
                    "Check your config.ini" << std::endl;
     exit(-1);
   }
 }
 
-void work() {
+std::vector<std::vector<std::string>> distribute(std::vector<std::string>& fils,
+                                                 int world_size) {
+  /* Equal distribution for lack of innovation at the time of coding */
+  std::vector<std::vector<std::string>> distribution;
+  unsigned int vecPos = 0;
+  for (int i = 0; i < world_size - 1; i++) {
+    std::vector<std::string> bucket;
+    for (unsigned int j = 0; j < (unsigned int)
+                                 ceil((float) fils.size() /
+                                      (float) (world_size - 1)); j++) {
+      if (vecPos > fils.size() - 1) { break; };
+      bucket.push_back(fils.at(vecPos++));
+    }
+    distribution.push_back(bucket);
+    if (vecPos > fils.size() - 1) { break; };
+  }
+  return distribution;
+};
+
+void work(int world_size, int world_rank) {
+  /* Receive workload, spread jobs amongst OpenMP threads */
+  // Get receptors
+  receptors = getReceptorsM(receptorsdir, receptorsprep);
+  // Wait to receive a vector of files
+  std::vector<std::string> FILES;
+  unsigned int FILESSize = 0;
+
+  MPI_Request request;
+  MPI_Irecv(&FILESSize, 1, MPI_INT, 0, SENDFILESSIZE,
+           MPI_COMM_WORLD, &request);
+  MPI_Wait(&request, MPI_STATUS_IGNORE);
+
+  char * tmp = new char[FILESSize];
+  MPI_Irecv(&tmp[0], FILESSize, MPI_BYTE, 0, SENDFILESCONT,
+           MPI_COMM_WORLD, &request);
+  MPI_Wait(&request, MPI_STATUS_IGNORE);
+  deserialize(FILES, tmp, FILESSize);
+  free(tmp);
+
+  // Do the right thing
+  std::vector<std::pair<std::string, float>> results;
+  #pragma omp parallel
+  #pragma omp for ordered
+  for (unsigned int j = 0; j < FILES.size(); j++) {
+    // Send back after every 5 results
+    // Makes all threads wait until here, then executed sequentially.
+    // To avoid accidental removal of result
+    // (e.g. A pushes back result, B clears immediately after)
+    #pragma omp ordered
+    {
+      if (results.size() >= 5) {
+        // Send back the results
+        unsigned int resultsSize;
+        tmp = serialize(results, &resultsSize);
+        MPI_Isend(&resultsSize, 1, MPI_INT, 0, SENDAFFINSIZE, MPI_COMM_WORLD,
+                  &request);
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
+        MPI_Isend(&tmp[0], resultsSize, MPI_BYTE, 0, SENDAFFINCONT, MPI_COMM_WORLD,
+                  &request);
+        MPI_Wait(&request, MPI_STATUS_IGNORE);
+        free(tmp);
+        // Clear results
+        results.clear();
+      }
+    }
+    // Dock
+    try {
+      float aff = genDock(library + "/" + FILES.at(j));
+      // Add result
+      #pragma omp critical
+      results.push_back(std::make_pair(FILES.at(j), aff));
+    } catch (...) {
+      info->errorMsg("Docking for " + FILES.at(j) +
+                     " failed, skipping...", false);
+      continue;
+    }
+  }
+
+}
+
+void letOthersWork(int world_size, int world_rank) {
   /* Prepare receptors */
-  std::vector<std::string> receptorfiles = getReceptorsM(receptors,
-                                                        receptorsprep);
+  receptors = getReceptorsM(receptorsdir, receptorsprep);
   if (!receptorsprep) {
-    for (auto s : receptorfiles) {
+    for (auto s : receptors) {
       prepareConfig(s);
       try {
         prepareReceptor(s);
@@ -218,12 +319,81 @@ void work() {
     }
   }
   /**************/
-  /* Get ligands */
-  std::vector ligands = getLibrary(library);
-}
-
-void letOthersWork() {
-  /* Receive workload, spread jobs amongst OpenMP threads */
+  /* Get and distribute ligands */
+  // Prepare workloads
+  std::vector<std::string> ligands = getLibrary(library);
+  auto distr = distribute(ligands, world_size);
+  int kArrSize = world_size - 1;
+  // Send buckets to subprocesses
+  info->infoMsg("Master is sending his work...");
+  MPI_Request requests[kArrSize];
+  unsigned int bucketSizes[kArrSize];
+  char * bucketBin[kArrSize];
+  // Send size in bytes
+  for (int i = 1; i < world_size; i++) {
+    bucketBin[i - 1] = serialize(distr.at(i - 1), &bucketSizes[i - 1]);
+    MPI_Isend(&bucketSizes[i - 1], 1, MPI_INT, i,
+              SENDFILESSIZE, MPI_COMM_WORLD, &requests[i - 1]);
+  }
+  MPI_Waitall(world_size - 1, requests, MPI_STATUS_IGNORE);
+  // Send binary data
+  for (int i = 1; i < world_size; i++) {
+    MPI_Isend(&bucketBin[i - 1][0], bucketSizes[i - 1], MPI_BYTE, i,
+              SENDFILESCONT, MPI_COMM_WORLD, &requests[i - 1]);
+  }
+  MPI_Waitall(world_size - 1, requests, MPI_STATUS_IGNORE);
+  // Free memory
+  for (int i = 1; i < world_size; i++) {
+    free(bucketBin[i - 1]);
+  }
+  /* Cache results and write every X results */
+  std::ofstream ofstream (workDir + "/RESULTS", std::ios::app);
+  unsigned int count = 0;
+  while (42) {
+    if (count >= ligands.size()) {
+      break;
+    }
+    // Get results of each bucket
+    std::vector<std::vector<std::pair<std::string, float>>> bucketResults;
+    // Get filesize from each
+    unsigned int resSize[world_size - 1];
+    for (int i = 1; i < world_size; i++) {
+      MPI_Irecv(&resSize[i - 1], 1, MPI_INT, i,
+                SENDAFFINSIZE, MPI_COMM_WORLD, &requests[i - 1]);
+    }
+    MPI_Waitall(world_size - 1, requests, MPI_STATUS_IGNORE);
+    // Get contents from each
+    char * resBin[world_size - 1];
+    for (int i = 1; i < world_size; i++) {
+      resBin[i - 1] = new char[resSize[i - 1]];
+      MPI_Irecv(&resBin[i - 1][0], resSize[i - 1], MPI_BYTE, i, SENDAFFINCONT,
+                MPI_COMM_WORLD, &requests[i - 1]);
+    }
+    MPI_Waitall(world_size - 1, requests, MPI_STATUS_IGNORE);
+    // Deserialize binary messages
+    for (int i = 1; i < world_size; i++) {
+      std::vector<std::pair<std::string, float>> results;
+      deserialize(results, resBin[i - 1], resSize[i - 1]);
+      bucketResults.push_back(results);
+      free(resBin[i - 1]);
+    }
+    for (int i = 1; i < world_size; i++) {
+      std::cout << "From Worker #" << i << ":" << std::endl;
+      for (auto j : bucketResults.at(i - 1)) {
+        std::cout << j.first << ": " << j.second << std::endl;
+      }
+    }
+    // Write to file
+    for (auto buck : bucketResults) {
+      for (auto res : buck) {
+        ofstream << res.first << "\t" << PDBtoFASTA(library + "/" + res.first)
+                 << "\t" << std::to_string(res.second) << "\n";
+        count++;
+      }
+    }
+    ofstream.flush();
+  }
+  ofstream.close();
 }
 
 int main(int argc, char *argv[]) {
@@ -259,8 +429,8 @@ int main(int argc, char *argv[]) {
   checkExecutable(pythonShPath);
   library = reader.Get("Dockr", "library", "");
   check(library);
-  receptors = reader.Get("Dockr", "receptors", "");
-  check(receptors);
+  receptorsdir = reader.Get("Dockr", "receptors", "");
+  check(receptorsdir);
   exhaustiveness = reader.GetInteger("Dockr", "exhaustiveness", 8);
   receptorsprep = reader.GetBoolean("Dockr", "receptorsprep", false);
   /*********************/
@@ -275,9 +445,9 @@ int main(int argc, char *argv[]) {
   /*********************/
   info = new Info(true, true, workDir + "/LOG");
   if (worker) {
-    work();
+    work(world_size, world_rank);
   } else {
-    letOthersWork();
+    letOthersWork(world_size, world_rank);
   }
   /*********************/
   MPI_Finalize();

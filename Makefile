@@ -22,6 +22,8 @@ all: folders compile
 # Create required folders
 folders:
 	mkdir -p obj
+	mkdir -p obj/Serialization
+	mkdir -p obj/VinaInstance
 
 # Link everything together 
 compile: objs
