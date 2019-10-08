@@ -264,6 +264,8 @@ void work(int world_size, int world_rank) {
   deserialize(FILES, tmp, FILESSize);
   free(tmp);
 
+  info->infoMsg("Worker #" + std::to_string(world_rank) + "'s workload:" +
+                std::to_string(FILES.size()));
   // Do the right thing
   std::vector<std::pair<std::string, float>> results;
   #pragma omp parallel
@@ -302,7 +304,19 @@ void work(int world_size, int world_rank) {
       continue;
     }
   }
-
+  // Send back whatever is left over
+  unsigned int resultsSize;
+  tmp = serialize(results, &resultsSize);
+  MPI_Isend(&resultsSize, 1, MPI_INT, 0, SENDAFFINSIZE, MPI_COMM_WORLD,
+            &request);
+  MPI_Wait(&request, MPI_STATUS_IGNORE);
+  MPI_Isend(&tmp[0], resultsSize, MPI_BYTE, 0, SENDAFFINCONT, MPI_COMM_WORLD,
+            &request);
+  MPI_Wait(&request, MPI_STATUS_IGNORE);
+  free(tmp);
+  // Clear results
+  results.clear();
+  info->infoMsg("Worker #" + std::to_string(world_rank) + " done.");
 }
 
 void letOthersWork(int world_size, int world_rank) {
@@ -322,6 +336,7 @@ void letOthersWork(int world_size, int world_rank) {
   /* Get and distribute ligands */
   // Prepare workloads
   std::vector<std::string> ligands = getLibrary(library);
+  info->infoMsg("Library size: " + std::to_string(ligands.size()));
   auto distr = distribute(ligands, world_size);
   int kArrSize = world_size - 1;
   // Send buckets to subprocesses
@@ -394,6 +409,7 @@ void letOthersWork(int world_size, int world_rank) {
     ofstream.flush();
   }
   ofstream.close();
+  info->infoMsg("All results back, check " + workDir + "/RESULTS");
 }
 
 int main(int argc, char *argv[]) {
