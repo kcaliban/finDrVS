@@ -1,11 +1,11 @@
-# Dockr
+# finDrVS
 
-Dockr is a distributed computing application to perform a (mirror image)
+finDrVS is a distributed computing application to perform a (mirror image)
 phage display in silico.
 
 ## Description
 
-Dockr simply runs a rigid AutoDock Vina docking for every file in the
+finDrVS simply runs a rigid AutoDock Vina docking for every file in the
 library folder specified in `config.ini`, distributing equally amongst
 all computing nodes and running one docking per processor per node
 at a time.
@@ -20,19 +20,19 @@ at a time.
 
 ## Installation
 
-Dockr is written for Linux. Make sure you have all dependencies installed, then
+finDrVS is written for Linux. Make sure you have all dependencies installed, then
 move on to the following steps:
 
 Go to any directory you like and clone this repository, change into its directory
 and compile using make
 ```bash
 cd ilikethisdirectory
-git clone https://github.com/kcaliban/Dockr.git
-cd Dockr
+git clone https://github.com/kcaliban/finDrVS.git
+cd finDrVS
 make
 ```
 
-Before you can use Dockr you have to configure it. Take a look at `config.ini`
+Before you can use finDrVS you have to configure it. Take a look at `config.ini`
 and change the settings accordingly, making sure all directories you
 specify exist.
 
@@ -43,17 +43,21 @@ specify exist.
 Dvelopr is written for computer clusters, it can however be executed on a single
 computer.
 
+Change to the directory you created in the installation step and run
+the following command:
 ```bash
-mpirun -np 1 ./Dockr : -np 1 ./Dockr -w
+mpirun -np 1 ./finDrVS : -np 1 ./finDrVS -w
 ```
 
 ### Computer cluster
 
 For computation on a computing cluster, you have to specify how many
-individual computing nodes (not threads!) you can use:
+individual computing nodes (not threads!) you can use.
 
+Change to the directory you created in the installation step and run
+the following command:
 ```bash
-mpirun -np 1 ./Dockr : -np NUMNODES ./Dockr -w
+mpirun -np 1 ./finDrVS : -np NUMNODES ./finDrVS -w
 ```
 
 ## License

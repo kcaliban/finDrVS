@@ -1,5 +1,5 @@
 // Copyright 2019 Fabian Krause
-#include "Dockr.h"
+#include "finDrVS.h"
 
 std::string PDBtoFASTA(std::string filename) {
   std::ifstream file(filename);
@@ -414,7 +414,7 @@ void letOthersWork(int world_size, int world_rank) {
 
 int main(int argc, char *argv[]) {
   /* Determine whether to run in Worker mode */
-  cxxopts::Options options("Dockr", "In silico phage display");
+  cxxopts::Options options("finDrVS", "In silico phage display");
   options.add_options()
     ("w", "Launch process in worker-mode", cxxopts::value<bool>()->default_value("false"));
   bool worker;
@@ -432,23 +432,23 @@ int main(int argc, char *argv[]) {
   INIReader reader("config.ini");
   if (reader.ParseError() != 0) {
         std::cout << "Can't load 'config.ini'\n"
-                     "Check if it exists in the same dir as Dockr";
+                     "Check if it exists in the same dir as finDrVS";
         return 1;
   }
-  workDir = reader.Get("Dockr", "workdir", "");
+  workDir = reader.Get("finDrVS", "workdir", "");
   check(workDir);
-  vina = reader.Get("Dockr", "vina", "vina");
+  vina = reader.Get("finDrVS", "vina", "vina");
   checkExecutable(vina);
-  mgltoolstilitiesPath = reader.Get("Dockr", "MGLToolsUtilities", "");
+  mgltoolstilitiesPath = reader.Get("finDrVS", "MGLToolsUtilities", "");
   check(mgltoolstilitiesPath);
-  pythonShPath = reader.Get("Dockr", "pythonsh", "");
+  pythonShPath = reader.Get("finDrVS", "pythonsh", "");
   checkExecutable(pythonShPath);
-  library = reader.Get("Dockr", "library", "");
+  library = reader.Get("finDrVS", "library", "");
   check(library);
-  receptorsdir = reader.Get("Dockr", "receptors", "");
+  receptorsdir = reader.Get("finDrVS", "receptors", "");
   check(receptorsdir);
-  exhaustiveness = reader.GetInteger("Dockr", "exhaustiveness", 8);
-  receptorsprep = reader.GetBoolean("Dockr", "receptorsprep", false);
+  exhaustiveness = reader.GetInteger("finDrVS", "exhaustiveness", 8);
+  receptorsprep = reader.GetBoolean("finDrVS", "receptorsprep", false);
   /*********************/
   /* Initialize OpenMPI */
   int world_size, world_rank;

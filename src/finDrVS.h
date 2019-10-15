@@ -1,12 +1,12 @@
 /* Copyright 2019 Fabian Krause
  *
- * Dockr Main class
+ * finDrVS Main class
  *
  * Performs a mirror image phage display in a distributed computing cluster
  * (or one computer if one is very very patient)
 */
-#ifndef SRC_DOCKR_H_
-#define SRC_DOCKR_H_
+#ifndef SRC_FINDRVS_H_
+#define SRC_FINDRVS_H_
 #include <math.h>
 #include <omp.h>
 #include <mpi.h>
@@ -28,4 +28,4 @@ int exhaustiveness;
 Info * info;
 bool receptorsprep;
 
-#endif  // SRC_DOCKR_H_
+#endif  // SRC_FINDRVS_H_
