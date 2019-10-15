@@ -60,6 +60,12 @@ the following command:
 mpirun -np 1 ./finDrVS : -np NUMNODES ./finDrVS -w
 ```
 
+### Results 
+
+You will find the results of your dockings in the folder specified
+as `workdir` in your `config.ini`. They contain the filename,
+the FASTA sequences and the calculated binding affinities.
+
 ## License
 
 See LICENSE file
