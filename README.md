@@ -1,7 +1,9 @@
 # finDrVS
 
-finDrVS is a distributed computing application to perform a (mirror image)
-phage display in silico.
+finDrVS is a distributed computing application to perform a virtual screening on several computers.
+
+finDrVS is part of finDr, a toolset developed to find peptide binders
+for reflect, the iGEM Team of Freiburg 2019.
 
 ## Description
 
