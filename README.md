@@ -51,6 +51,11 @@ the following command:
 mpirun -np 1 ./finDrVS : -np 1 ./finDrVS -w
 ```
 
+To also convert your receptor(s) from L to D or the other way around:
+```bash
+mpirun -np 1 --mi ./finDrVS : -np 1 ./finDrVS -w
+```
+
 ### Computer cluster
 
 For computation on a computing cluster, you have to specify how many
@@ -60,6 +65,11 @@ Change to the directory you created in the installation step and run
 the following command:
 ```bash
 mpirun -np 1 ./finDrVS : -np NUMNODES ./finDrVS -w
+```
+
+To also convert your receptor(s) from L to D or the other way around:
+```bash
+mpirun -np 1 --mi ./finDrVS : -np NUMNODES ./finDrVS -w
 ```
 
 ### Results 
