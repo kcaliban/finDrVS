@@ -1,6 +1,38 @@
 // Copyright 2019 Fabian Krause
 #include "finDrVS.h"
 
+void mImage(const std::string pdb) {
+  // Read receptor file
+  std::ifstream t(pdb);
+  t.seekg(0, std::ios::end);
+  size_t size = t.tellg();
+  std::string buffer(size, ' ');
+  t.seekg(0);
+  t.read(&buffer[0], size);
+  t.close();
+
+  std::string output;
+  // Read line per line, set min and max accordingly
+  std::string line;
+  std::stringstream receptorStream(buffer);
+  while (std::getline(receptorStream, line, '\n')) {
+    std::string newline = line;
+    if (line.substr(0, 4) == "ATOM" || line.substr(0, 6) == "HETATM") {
+      float x = - stof(line.substr(30, 8));
+      char invertedX[9];  // Null terminating char at the end => 9
+      sprintf(invertedX, "%8.3f", x);
+      for (unsigned int i = 0; i < 8; i++) {
+        newline[30 + i] = invertedX[i];
+      }
+    }
+    output.append(newline + "\n");
+  }
+
+  std::ofstream outf(pdb, std::ofstream::out | std::ofstream::trunc);
+  outf << output;
+  outf.close();
+}
+
 std::string PDBtoFASTA(std::string filename) {
   std::ifstream file(filename);
   std::unordered_map<std::string, std::string> AA({
@@ -319,11 +351,14 @@ void work(int world_size, int world_rank) {
   info->infoMsg("Worker #" + std::to_string(world_rank) + " done.");
 }
 
-void letOthersWork(int world_size, int world_rank) {
+void letOthersWork(int world_size, int world_rank, bool mirrorImage) {
   /* Prepare receptors */
   receptors = getReceptorsM(receptorsdir, receptorsprep);
-  if (!receptorsprep) {
+  if (mirrorImage || !receptorsprep) {
     for (auto s : receptors) {
+      if (mirrorImage) {
+        mImage(s);
+      }
       prepareConfig(s);
       try {
         prepareReceptor(s);
@@ -416,11 +451,18 @@ int main(int argc, char *argv[]) {
   /* Determine whether to run in Worker mode */
   cxxopts::Options options("finDrVS", "In silico phage display");
   options.add_options()
-    ("w", "Launch process in worker-mode", cxxopts::value<bool>()->default_value("false"));
+    ("w", "Launch process in worker-mode", cxxopts::value<bool>()->default_value("false"))
+    ("mi",
+     "(optional) Convert the target into its mirror-image (L to D or D to L)\n"
+     "Target has to be unprepared (just the .pdb file, no .pdbqt and conf)\n"
+     "Attention: Original target gets overwritten!"
+     , cxxopts::value<bool>()->default_value("false"));
   bool worker;
+  bool mirrorImage;
   try {
     auto result = options.parse(argc, argv);
     worker = result["w"].as<bool>();
+    mirrorImage = result["mi"].as<bool>();
 
   } catch (std::exception& e) {
     std::cout << e.what() << std::endl;
@@ -463,7 +505,7 @@ int main(int argc, char *argv[]) {
   if (worker) {
     work(world_size, world_rank);
   } else {
-    letOthersWork(world_size, world_rank);
+    letOthersWork(world_size, world_rank, mirrorImage);
   }
   /*********************/
   MPI_Finalize();
