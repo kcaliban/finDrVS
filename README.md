@@ -17,7 +17,7 @@ at a time.
 * An implementation of the MPI standard, for distribution on cluster nodes, but also required to run on a single computer. We used [MPICH](https://www.mpich.org/)
 * [AutoDock Vina](http://vina.scripps.edu/), for binding affinity calculations
 * [MGLTools](http://mgltools.scripps.edu/), for generation of files required by AutoDock Vina
-* [PyMOL (Open Source)](https://sourceforge.net/projects/pymol/), for generation of PDB files
+* [PyMOL (Open Source)](https://github.com/schrodinger/pymol-open-source), for generation of PDB files
 
 
 ## Installation
